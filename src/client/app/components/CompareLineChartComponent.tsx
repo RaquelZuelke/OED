@@ -27,6 +27,13 @@ import { useTranslate } from '../redux/componentHooks';
  * @returns plotlyLine graphic
  */
 export default function CompareLineChartComponent() {
+	//counting renderCount for testing purposes
+	const renderCount = React.useRef(0);
+	renderCount.current += 1;
+	const checkedDataKeysRef = React.useRef<Set<string>>(new Set());
+	console.log('%c[CompareLineChartComponent] Render Count: ',
+		'color: #888888; font-size: 10px;', renderCount.current);
+
 	const translate = useTranslate();
 	const graphState = useAppSelector(selectGraphState);
 	const meterOrGroupID = useAppSelector(selectThreeDComponentInfo).meterOrGroupID;
@@ -34,6 +41,13 @@ export default function CompareLineChartComponent() {
 	const locale = useAppSelector(selectSelectedLanguage);
 	const shiftAmount = useAppSelector(selectShiftAmount);
 	const { args, shouldSkipQuery, argsDeps } = useAppSelector(selectCompareLineQueryArgs);
+	const compareKey = React.useMemo(() => { return JSON.stringify({
+		meterOrGroupID,
+		timeInterval: graphState.queryTimeInterval.toString(),
+		shiftInterval: graphState.shiftTimeInterval.toString(),
+		shiftAmount
+	});
+	}, [meterOrGroupID, graphState.queryTimeInterval, graphState.shiftTimeInterval, shiftAmount]);
 	// getting the time interval of current data
 	const timeInterval = graphState.queryTimeInterval;
 	const shiftInterval = graphState.shiftTimeInterval;
@@ -106,10 +120,10 @@ export default function CompareLineChartComponent() {
 	} else if (!enoughData) {
 		layout = setHelpLayout(translate('no.data.in.range'));
 	} else {
-		if (!isFetching && !isFetchingNew) {
+		//if (!isFetching && !isFetchingNew) {
 			// Checks/warnings on received reading data
-			checkReceivedData(data[0].x, dataNew[0].x);
-		}
+		//	checkReceivedData(data[0].x, dataNew[0].x);
+		//}
 		layout = {
 			autosize: true, showlegend: true,
 			legend: { x: 0, y: 1.1, orientation: 'h' },
@@ -144,6 +158,34 @@ export default function CompareLineChartComponent() {
 			? item.text.map(text => text.replace('<br>', '<br>Shifted '))
 			: item.text?.replace('<br>', '<br>Shifted ')
 	}));
+
+	const dataCheckKey = React.useMemo(() => {
+		const origX = data[0]?.x;
+		const newX = dataNew[0]?.x;
+
+		if(!origX || !newX) {
+			return null;
+		};
+
+		const origXStr = origX.join(',');
+		const newXStr = newX.join(',');
+		return `${origXStr}|${newXStr}`;
+	}, [data, dataNew]);
+
+	// Render the Plotly graph
+	React.useEffect(() => {
+		console.log('[useEffect] checkReceivedData called from useEffect');
+
+		if (!dataCheckKey || isFetching || isFetchingNew || !data.length || !dataNew.length) {
+			return;
+		}
+
+		if(checkedDataKeysRef.current.has(dataCheckKey)) {
+			return;
+		}
+		checkReceivedData(data[0].x, dataNew[0].x);
+		checkedDataKeysRef.current.add(dataCheckKey);
+	}, [dataCheckKey, isFetching, isFetchingNew]);
 
 	return (
 		<>
@@ -194,10 +236,14 @@ export default function CompareLineChartComponent() {
  * @param shiftedReading shifted data to compare
  */
 function checkReceivedData(originalReading: any, shiftedReading: any) {
+	// For debugging how often this is called
+	console.count('[checkReceivedData] Called');
+	
 	let numberPointsSame = true;
 	if (originalReading.length !== shiftedReading.length) {
 		// If the number of points vary then then scales will not line up point by point. Warn the user.
 		numberPointsSame = false;
+		console.count('[WARN] The number of readings differ for original and shifted lines: ',)
 		showWarnNotification(
 			`The original line has ${originalReading.length} readings but the shifted line has ${shiftedReading.length}`
 			+ ' readings which means the points will not align horizontally.'
@@ -205,6 +251,7 @@ function checkReceivedData(originalReading: any, shiftedReading: any) {
 	}
 	// Now see if the original and shifted lines overlap.
 	if (moment(shiftedReading.at(-1).toString()) > moment(originalReading.at(0).toString())) {
+		console.count('[INFO] Overlap detected between original and shifted lines');
 		showInfoNotification(
 			`The shifted line overlaps the original line starting at ${originalReading[0]}`,
 			toast.POSITION.TOP_RIGHT,
