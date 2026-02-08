@@ -66,7 +66,7 @@ export function validateSortingOrder(sortingOrder: string): SortingOrder {
  */
 export function calculateCompareTimeInterval(comparePeriod: ComparePeriod, currentTime: moment.Moment): TimeInterval {
 	// begin will be the start of the compare time and end will be the end of the compare time.
-	let begin;
+	let begin; 
 	// OED uses raw/meter readings to get compare data so it is only accurate to the last reading.
 	// We also limit the comparison to the last hour.
 	// By setting the end time to the hour it works properly and avoids changing with each request
